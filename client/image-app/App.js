@@ -4,7 +4,6 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import CameraScreen from './screens/CameraScreen';
 import ImageListScreen from './screens/ImageListScreen';
 import ImageEditScreen from './screens/ImageEditScreen';
-import PaintScreen from './screens/PaintScreen';
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import { Text, TouchableOpacity } from 'react-native';
 
