@@ -7,7 +7,6 @@ import {
   Image,
   TouchableOpacity,
   Dimensions,
-  ActivityIndicator,
 } from "react-native";
 import { getImages } from "../functions";
 import FontAwesome from "@expo/vector-icons/Ionicons";
@@ -41,7 +40,7 @@ const ImageListScreen = ({ navigation }) => {
         horizontal={false}
         // keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <View
+          <TouchableOpacity
             key={item.id}
             style={{
               marginBottom: 10,
@@ -49,11 +48,10 @@ const ImageListScreen = ({ navigation }) => {
           >
             <Image
               source={{ uri: item.publicUrl }}
-              style={{ width: width * 0.8, margin:10, }}
-              loadingIndicatorSource={require('../assets/icon.png')}
+              style={{ width: width * 0.8, height:width * .8, margin:10, borderRadius:15}}
             />
             {/* Display image, information, and map markers */}
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", margin:10 }}>
               <FontAwesome
                 name="calendar"
                 color={"#333"}
@@ -64,10 +62,10 @@ const ImageListScreen = ({ navigation }) => {
                 {item.date}
               </Text>
             </View>
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", margin:10 }}>
               <FontAwesome
                 name="location"
-                color={"#333"}
+                color={"red"}
                 size={15}
                 style={{ marginRight: 10 }}
               />
@@ -75,7 +73,7 @@ const ImageListScreen = ({ navigation }) => {
                 {item.latitude}, {item.longitude}
               </Text>
             </View>
-          </View>
+          </TouchableOpacity>
         )}
       />
       <TouchableOpacity
@@ -96,11 +94,9 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   flatlist: {
-    // backgroundColor: "red",
     alignItems: "center",
     justifyContent:'center',
     zIndex:0,
-    // height: height *.5,
   },
   button: {
     width: 80,

@@ -1,141 +1,160 @@
 import React, { useState, useRef, useEffect } from "react";
-import { View, TouchableOpacity, StyleSheet, Dimensions } from "react-native";
-import SignatureScreen from "react-native-signature-canvas";
-import * as FileSystem from "expo-file-system";
+import {
+  View,
+  TouchableOpacity,
+  ImageBackground,
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+  Dimensions,
+  BackHandler
+} from "react-native";
 import FontAwesome from "@expo/vector-icons/FontAwesome";
-import { captureRef } from "react-native-view-shot";
 import * as MediaLibrary from "expo-media-library";
-import { ImageManipulator } from "expo-image-manipulator";
-import { uploadImages, getCurrentLocation } from "../functions";
+import { captureRef } from "react-native-view-shot";
+import ExpoDraw from "expo-draw";
+import { getCurrentLocation } from "../functions";
+import { storage, db } from "../functions/firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { addDoc, collection } from "firebase/firestore/lite";
+import * as Location from "expo-location";
+import { Header, IconButton } from "../components";
+import ColorPicker, { HueSlider } from "reanimated-color-picker";
 
 const { width, height } = Dimensions.get("screen");
-const style = `.m-signature-pad {box-shadow: none; border: none; } 
-              .m-signature-pad--body {border: none;}
-              .m-signature-pad--footer {display: none; margin: 0px;}
-              body,html {
-              width: ${width}px; height: ${height}px;}`;
-const ImageEditScreen = ({ route, navigation, text }) => {
-  const ref = useRef();
-  const [data, setData] = useState("");
-  const [location, setLocation] = useState(null)
 
+const ImageEditScreen = ({ route, navigation }) => {
+  const [location, setLocation] = useState(null);
+  const [errorMsg, setErrorMsg] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [displaySlider, setDisplaySlider] = useState(false);
+  const [color, setColor] = useState("lightgreen");
+  const [message, setMessage] = useState("Loading");
+  useEffect(() => {
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        setErrorMsg("Permission to access location was denied");
+        alert(errorMsg);
+        return;
+      }
+
+      let location = await Location.getCurrentPositionAsync({});
+
+      // Ensure location is not null before setting it in the state
+      if (location) {
+        setLocation(location);
+      }
+    })();
+  }, []);
+ 
   const [status, requestPermission] = MediaLibrary.usePermissions();
   const imageRef = useRef();
+  const drawRef = useRef();
   if (status === null) {
     requestPermission();
   }
-  useEffect(() => {
-    (async () => {
-      const location = await getCurrentLocation();
-      setLocation(location)
-    })();
-  }, []);
-  React.useEffect(() => {
-    // Use `setOptions` to update the button that we previously specified
-    // Now the button includes an `onPress` handler to update the count
-    navigation.setOptions({
-      headerRight: () => (
-        <TouchableOpacity onPress={async () => onSaveImageAsync()}>
-          <FontAwesome name="check" size={24} color="black" />
-        </TouchableOpacity>
-      ),
-    });
-  }, [navigation]);
-  // Called after ref.current.readSignature() reads a non-empty base64 string
 
+  const handleClear = (clear) => {
+    drawRef.current._clear = clear;
+  };
   const onSaveImageAsync = async () => {
     try {
       const localUri = await captureRef(imageRef, {
-        height: 440,
+        format: "jpg",
+        result: "tmpfile",
         quality: 0.5,
       });
-      await MediaLibrary.saveToLibraryAsync(localUri);
-      if (localUri) {
-        alert("Saved!");
+      setLoading(true);
+      setMessage("fetching current location data");
+      const location = await getCurrentLocation();
+      if (location) {
+        setMessage("Fetched location data");
+        const storageRef = ref(
+          storage,
+          "images/" + new Date().getTime() + ".jpg"
+        );
+        const response = await fetch(localUri);
+        const blob = await response.blob();
+
+        setMessage("Uploading image to server");
+        await uploadBytes(storageRef, blob);
+        const { latitude, longitude } = location;
+        const downloadURL = await getDownloadURL(storageRef);
+        setMessage("image uploaded to server");
+        const image = {
+          filename: new Date().getTime() + ".jpg",
+          date: new Date().toISOString(),
+          latitude,
+          longitude,
+          publicUrl: downloadURL,
+        };
+
+        const docRef = await addDoc(collection(db, "images"), image);
+        console.log("Document written with ID: ", docRef.id);
+        console.log("Uploaded and URL:", downloadURL);
+
+        setMessage("done");
+        navigation.replace("ImageList");
       }
     } catch (e) {
       console.log(e);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleOK = async (signature) => {
-    const path = FileSystem.cacheDirectory + "sign.png";
-    FileSystem.writeAsStringAsync(
-      path,
-      signature.replace("data:image/png;base64,", ""),
-      { encoding: FileSystem.EncodingType.Base64 }
-    )
-      .then(() => FileSystem.getInfoAsync(path))
-      .then((data) => {
-        console.log(data);
-        MediaLibrary.saveToLibraryAsync(data.uri);
-        uploadImages(route.params.imageUri, data.uri, new Date().toUTCString(), location.latitude, location.longitude)
-      })
-      .then(alert("saved"))
-      .catch(console.error);
+  const onSelectColor = (color) => {
+    setColor(color.hex);
   };
-
-  const combineImages = async (image1, image2) => {
-    // const image1 = require('./path/to/transparent_image1.png');
-    // const image2 = require('./path/to/transparent_image2.png');
-
-    const manipulatorResult1 = await ImageManipulator.manipulateAsync(image1, [
-      { resize: { width: 300, height: 300 } },
-    ]);
-    const manipulatorResult2 = await ImageManipulator.manipulateAsync(image2, [
-      { resize: { width: 300, height: 300 } },
-    ]);
-
-    const overlayConfig = {
-      overlay: { uri: manipulatorResult2.uri },
-    };
-
-    const overlappedResult = await ImageManipulator.manipulateAsync(
-      [manipulatorResult1.uri],
-      [overlayConfig]
-    );
-    return overlappedResult;
-    // setOverlappedImage(overlappedResult.uri);
-  };
-
-  // Called after ref.current.readSignature() reads an empty string
-  const handleEmpty = () => {
-    console.log("Empty");
-  };
-
-  // Called after ref.current.clearSignature()
-  const handleClear = () => {
-    console.log("clear success!");
-  };
-
-  // Called after end of stroke
-  const handleEnd = () => {
-    ref.current.readSignature();
-  };
-
-  // Called after ref.current.getData()
-  const handleData = (data) => {
-    console.log(data);
-    setData(data);
-  };
-  console.log(route.params);
   return (
-    <View style={styles.container} ref={imageRef} collapsable={false}>
-      <SignatureScreen
-        ref={ref}
-        onEnd={handleEnd}
-        onOK={handleOK}
-        onEmpty={handleEmpty}
-        onClear={handleClear}
-        onGetData={handleData}
-        autoClear={false}
-        descriptionText={text}
-        bgSrc={route.params.imageUri}
-        bgWidth={width}
-        bgHeight={height}
-        webStyle={style}
-      />
-      <View style={styles.hidden}></View>
+    <View collapsable={false} ref={imageRef} style={{ flex: 1 }}>
+      <ImageBackground
+        style={{ flex: 1 }}
+        source={{
+          uri: route.params.backgroundURI,
+        }}
+      >
+        {/* <View style={styles.header}></View> */}
+        <Header backAllowed={false}>
+          {/* <IconButton name={"undo"} /> */}
+          <IconButton
+            onPress={() => setDisplaySlider(!displaySlider)}
+            name={"pencil"}
+          />
+          <IconButton onPress={async () => onSaveImageAsync()} name={"check"} />
+        </Header>
+        <ExpoDraw
+          ref={drawRef}
+          strokes={[]}
+          containerStyle={{ backgroundColor: "rgba(0,0,0,0.01)" }}
+          rewind={(undo) => {
+            this._undo = undo;
+          }}
+          clear={(clear) => {
+            this._clear = clear;
+          }}
+          color={color}
+          strokeWidth={4}
+          enabled={true}
+          onChangeStrokes={(strokes) =>
+            console.log("----------------------------------------")
+          }
+        />
+        <View style={{ ...styles.modal, display: loading ? "flex" : "none" }}>
+          <ActivityIndicator color={"#fff"} size={"large"} />
+          <Text style={styles.text}>{message}</Text>
+        </View>
+        {displaySlider && (
+          <ColorPicker
+            style={{ width: "100%", marginBottom: 30, marginHorizontal: 10 }}
+            value={color}
+            onComplete={onSelectColor}
+          >
+            <HueSlider sliderThickness={10} />
+          </ColorPicker>
+        )}
+      </ImageBackground>
     </View>
   );
 };
@@ -143,13 +162,29 @@ const ImageEditScreen = ({ route, navigation, text }) => {
 export default ImageEditScreen;
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+  header: {
+    zIndex: 1000,
+    backgroundColor: "transparent",
+    width: "100%",
+    height: 60,
+    marginTop: 30,
   },
-  hidden: {
-    display: "none",
-    flex: 1,
-    width,
-    height,
+  text: {
+    color: "#fff",
+    fontSize: 20,
+    textTransform: "capitalize",
+    marginTop: 10,
+    textAlign:'center'
+  },
+  modal: {
+    width: 200,
+    height: 200,
+    backgroundColor: "#0003",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 15,
+    position:'absolute',
+    top:height / 2 - 100,
+    left:width/ 2 - 100,
   },
 });

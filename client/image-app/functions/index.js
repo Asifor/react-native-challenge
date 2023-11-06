@@ -2,67 +2,46 @@ import axios from "axios";
 import { serverUrl } from "../config";
 import * as Location from "expo-location"; // Import Expo's location module
 
+import * as FileSystem from "expo-file-system";
+import {getDocs, collection} from 'firebase/firestore/lite'
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { storage, db } from "./firebase";
 
-
-// const getImages = async()=>{
-//   const images = []
-//   try {
-//     response = await axios.get(`${serverUrl}images`)
-//     if (response.status === 200) {
-//       images = await response.data;
-//       return await images
-//     }
-//   } catch (error) {
-//     console.log(error.code);
-//   }
-
-// }
-
-const getImageUri = async (imageUri) => {
+const uploadImageData = async (fileUri) => {
+  const storageRef = ref(storage, "images/" + new Date().getTime() + ".png");
+  const metadata = {
+    contentType: "image/jpeg", // Specify the content type as 'image/png'
+  };
   try {
-    const formData = new FormData();
-    formData.append("image", {
-      uri: imageUri,
-      type: "image/jpeg",
-      name: "image.jpg",
-    });
+    const response = await uploadBytes(storageRef, fileUri, metadata);
 
-    const response = await axios.post(
-      `${serverUrl}getUri`,
-      formData,
-      {
-        headers: {
-          Accept: "application/json",
-          "Content-Type": "multipart/form-data",
-        },
-      }
-    );
+    // Get the download URL of the uploaded image
+    const downloadURL = await getDownloadURL(storageRef);
+    console.log("Uploaded and URL:", downloadURL);
 
-    if (response.status === 200) {
-      const data = response.data;
-      console.log(data);
-      return data.uri
-    } else {
-      console.error("Error uploading the image.");
-    }
   } catch (error) {
-    console.error("Error get image uri:", error.code);
+    console.error("Error uploading image to Firebase Storage:", error);
   }
 };
+
 
 const getImages = async () => {
   try {
-    const response = await axios.get(`${serverUrl}images`);
-    // Handle the response data here (in this case, logging it to the console)
-    console.log('Images:', response.data);
-    return response.data;
-  } catch (error) {
-    // Handle any errors that occur during the request
-    console.error('Error retrieving images:', error);
-    throw error;
+    const querySnapshot = await getDocs(collection(db, "images"));
+    querySnapshot.forEach((doc) => {
+      console.log(`${doc.id} => ${doc.data()}`);
+    });
+    const images = [];
+
+    querySnapshot.forEach((doc) => {
+      images.push(doc.data());
+    });
+
+    return images;
+  } catch (err) {
+    console.log(err);
   }
 };
-
 
 // Function to get the device's location
 const getCurrentLocation = async () => {
@@ -82,39 +61,46 @@ const getCurrentLocation = async () => {
   }
 };
 
-const uploadImages = async (image1, image2, date, latitude, longitude) => {
+const uploadImages = async (image1, image2, latitude, longitude, date) => {
   const formData = new FormData();
-
   // Append image data to the FormData
-  formData.append('images', {
-    uri: image1.uri, // Replace with your image1 URI
-    name: 'image1.jpg',
-    type: 'image/jpeg', // Adjust the content type as needed
+  formData.append("images", {
+    uri: image1, // Replace with your image1 URI
+    name: "image1.jpg",
+    type: "image/jpeg", // Adjust the content type as needed
   });
-  formData.append('images', {
-    uri: image2.uri, // Replace with your image2 URI
-    name: 'image2.jpg',
-    type: 'image/jpeg', // Adjust the content type as needed
-  });
+  // formData.append("images", {
+  //   uri: image2, // Replace with your image2 URI
+  //   name: "image2.jpg",
+  //   type: "image/jpeg", // Adjust the content type as needed
+  // });
 
   // Add additional data to the FormData
-  formData.append('date', date);
-  formData.append('latitude', latitude);
-  formData.append('longitude', longitude);
+  formData.append("date", null);
+  formData.append("latitude", latitude);
+  formData.append("longitude", longitude);
+  const body = formData;
 
   try {
+    console.log(formData);
     const response = await axios.post(`${serverUrl}uploads`, formData, {
       headers: {
-        'Content-Type': 'multipart/form-data',
+        "Content-Type": "multipart/form-data",
       },
     });
 
     if (response.data) {
-      console.log('Images uploaded and information saved.');
+      console.log("Images uploaded and information saved.");
     }
   } catch (error) {
-    console.error('Error uploading images:', error);
+    console.error("Error uploading images:", error.code);
   }
 };
-const sendImageToAPI = null
-export { sendImageToAPI, getCurrentLocation, getImages, uploadImages, getImageUri };
+
+const sendImageToAPI = null;
+export {
+  sendImageToAPI,
+  getCurrentLocation,
+  getImages,
+  uploadImages,
+};
