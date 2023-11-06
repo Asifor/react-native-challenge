@@ -69,11 +69,6 @@ const uploadImages = async (image1, image2, latitude, longitude, date) => {
     name: "image1.jpg",
     type: "image/jpeg", // Adjust the content type as needed
   });
-  // formData.append("images", {
-  //   uri: image2, // Replace with your image2 URI
-  //   name: "image2.jpg",
-  //   type: "image/jpeg", // Adjust the content type as needed
-  // });
 
   // Add additional data to the FormData
   formData.append("date", null);
